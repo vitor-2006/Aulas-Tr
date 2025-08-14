@@ -6,24 +6,89 @@ const port = 3000;
 app.use(express.urlencoded());
 app.use(express.json());
 
+// Define the interface to describe the shape of a user object
 interface IUser {
-    id: number = 1
-    name: string = 'João'
-    email: string = 'joão@gmail.com'
-    isActive: boolean = true
+    id: number;
+    name: string;
+    email: string;
+    isActive: boolean;
 }
 
-const users: IUser[]
+// Now you can define an array of IUser objects
+let users: IUser[] = [
+    {
+        id: 1,
+        name: 'João',
+        email: 'joão@gmail.com',
+        isActive: true
+    },
+    {
+        id: 2,
+        name: 'Maria',
+        email: 'maria@gmail.com',
+        isActive: false
+    }
+];
 
-app.get('/', (req: Request, res: Response) => {
-res.send('Hello, TypeScript with Express!');
-});
+
+// app.get('/', (req: Request, res: Response) => {
+// res.send('Hello, TypeScript with Express!');
+// });
+
+
+// GET `/users` //Retorna todos os usuários.
+// GET `/users/:id`//Retorna um usuário específico pelo ID.
+// POST `/users`: //Adiciona um novo usuário ao array. O corpo da requisição deve ser validado para garantir que corresponde à interface `IUser` (pode ser uma validação simples para este exercício).
+// PUT `/users/:id`: //Atualiza um usuário existente.
+// DELETE `/users/:id`: //Remove um usuário.
+
+app.use(express.json())
+
+app.get('/users', (req: Request, res: Response) => {
+    return res.send(users)
+})
+
+app.get('/users/:id', (req: Request<{id:number}>, res: Response) => {
+// if(users.includes(req.params.users.id)){
+//     return res.send(users)
+// }else{
+//     return res.send('id inválido!')
+// }
+    const user = users.find((element) => {
+        return element.id === req.params.id
+    })
+    return res.json(user)
+})
+        
+app.post('/users', (req: Request, res: Response) => {
+    users.push(req.body)
+    return res.send(users)
+})
+        
+app.put('/users/:id', (req: Request<{id:number}>, res: Response) => {
+    const user = users.findIndex((element) => {
+        return element.id === req.params.id
+    })
+    let update = req.body
+    if(user!==-1){
+        users[user] = update
+    }
+    return res.json(user)
+})
+        
+app.delete('/users/:id', (req: Request<{id:number}>, res: Response) => {
+    const user = users.findIndex((element) => {
+        return element.id === req.params.id
+        
+    })
+    if(user!==-1){
+        users.splice(user, 1)
+        return res.send('user removido!')
+    }else{
+        return res.send('user não encontrado!')
+    }
+})
 
 app.listen(port, () => {
     console.log(`Server is running at <http://localhost>:${port}`);
-    GET `/users` //Retorna todos os usuários.
-    GET `/users/:id`//Retorna um usuário específico pelo ID.
-    POST `/users`: //Adiciona um novo usuário ao array. O corpo da requisição deve ser validado para garantir que corresponde à interface `IUser` (pode ser uma validação simples para este exercício).
-    PUT `/users/:id`: //Atualiza um usuário existente.
-    DELETE `/users/:id`: //Remove um usuário.
 });
