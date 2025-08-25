@@ -1,4 +1,7 @@
-import express, { Request, Response, NextFunction, ErrorRequestHandler }  from 'express'
+// src/index.ts
+
+import express, { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
+import { userRepository, IUser, CreateUserDto } from './user.repository'; // <-- Import the repository
 
 // Custom Error class
 class AppError extends Error {
@@ -7,7 +10,6 @@ class AppError extends Error {
     constructor(message: string, statusCode: number) {
         super(message);
         this.statusCode = statusCode;
-        // Ensures the correct prototype chain
         Object.setPrototypeOf(this, AppError.prototype);
     }
 }
@@ -15,94 +17,70 @@ class AppError extends Error {
 const app = express();
 const port = 3000;
 
-// Middleware to log requests
 const loggingMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
-    next(); // Pass control to the next handler
+    next();
 };
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(loggingMiddleware); // Apply the logging middleware to all routes
-
-// Define the interface to describe the shape of a user object
-interface IUser {
-    id: number;
-    name: string;
-    email: string;
-    isActive: boolean;
-}
-
-// Now you can define an array of IUser objects
-let users: IUser[] = [
-    {
-        id: 1,
-        name: 'João',
-        email: 'joão@gmail.com',
-        isActive: true
-    },
-    {
-        id: 2,
-        name: 'Maria',
-        email: 'maria@gmail.com',
-        isActive: false
-    }
-];
+app.use(loggingMiddleware);
 
 // GET `/users` //Returns all users.
-app.get('/users', (req: Request, res: Response) => {
+app.get('/users', async (req: Request, res: Response) => {
+    const users = await userRepository.findAll();
     return res.json(users);
 });
 
 // GET `/users/:id` //Returns a specific user by ID.
-app.get('/users/:id', (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+app.get('/users/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     const userId = parseInt(req.params.id, 10);
-    const user = users.find(element => element.id === userId);
+    const user = await userRepository.findById(userId);
     if (user) {
         return res.json(user);
     }
-    // Pass error to the global error handler
     return next(new AppError('User not found!', 404));
 });
-        
-// POST `/users`: //Adds a new user to the array.
-app.post('/users', (req: Request, res: Response) => {
-    // This follows the original logic of pushing the body and returning the full array.
-    // Note: The client is responsible for providing the full user object, including the ID.
-    users.push(req.body);
-    return res.status(201).send(users);
+
+// POST `/users`: //Adds a new user.
+app.post('/users', async (req: Request, res: Response) => {
+    // The request body should contain name, email, isActive
+    const userData: CreateUserDto = req.body;
+    const newUser = await userRepository.create(userData);
+    return res.status(201).json(newUser);
 });
-        
+
 // PUT `/users/:id`: //Updates an existing user.
-app.put('/users/:id', (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+app.put('/users/:id', async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     const userId = parseInt(req.params.id, 10);
-    const userIndex = users.findIndex(element => element.id === userId);
+    const updates: Partial<IUser> = req.body;
     
-    if (userIndex !== -1) {
-        const updatedUser: IUser = { ...users[userIndex], ...req.body };
-        users[userIndex] = updatedUser;
+    const updatedUser = await userRepository.update(userId, updates);
+    
+    if (updatedUser) {
         return res.json(updatedUser);
     }
     return next(new AppError('User not found!', 404));
 });
-        
+
 // DELETE `/users/:id`: //Removes a user.
-app.delete('/users/:id', (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+app.delete('/users/:id', async (req: Request<{ id:string }>, res: Response, next: NextFunction) => {
     const userId = parseInt(req.params.id, 10);
-    const userIndex = users.findIndex(element => element.id === userId);
     
-    if (userIndex !== -1) {
-        users.splice(userIndex, 1);
-        return res.status(200).send('user removido!');
+    const wasDeleted = await userRepository.delete(userId);
+    
+    if (wasDeleted) {
+        // Using 204 No Content is common for successful deletions without a body
+        return res.status(204).send(); 
     } else {
-        return next(new AppError('user não encontrado!', 404));
+        return next(new AppError('User not found!', 404));
     }
 });
 
 // Global Error Handling Middleware
 const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
-    console.error(`Error: ${err.message}`); // Log the error for debugging purposes
+    console.error(`Error: ${err.message}`);
 
     if (err instanceof AppError) {
         return res.status(err.statusCode).json({
@@ -111,14 +89,12 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
         });
     }
 
-    // For any other unexpected errors
     return res.status(500).json({
         status: 'error',
         message: 'An internal server error occurred.'
     });
 };
 
-// This must be the last middleware to be used
 app.use(errorHandler);
 
 app.listen(port, () => {
